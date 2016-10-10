@@ -5,30 +5,20 @@
 
   ExtendableEvent.prototype.waitUntil = function(promise) {
     const extendableEvent = this;
-    let promises = promisesMap.get(extendableEvent);
 
-    if (promises) {
-      promises.push(Promise.resolve(promise));
-      return;
+    const head = () => promisesMap.get(extendableEvent);
+
+    if (head()) {
+      promisesMap.set(extendableEvent, head().then(() => promise));
+    } else {
+      promisesMap.set(extendableEvent, Promise.resolve());
+      waitUntil.call(extendableEvent, promise.then(function processPromises() {
+        const h = head();
+        return h.then(() => {
+          return h === head() ? Promise.resolve() : processPromises(); // Has head moved?
+        });
+      }));
     }
-
-    promises = [Promise.resolve(promise)];
-    promisesMap.set(extendableEvent, promises);
-
-    // call original method
-    return waitUntil.call(extendableEvent, Promise.resolve().then(function processPromises() {
-      const len = promises.length;
-
-      // wait for all to settle
-      return Promise.all(promises.map(p => p.catch(()=>{}))).then(() => {
-        // have new items been added? If so, wait again
-        if (promises.length != len) return processPromises();
-        // we're done!
-        promisesMap.delete(extendableEvent);
-        // reject if one of the promises rejected
-        return Promise.all(promises);
-      });
-    }));
   };
 
   FetchEvent.prototype.respondWith = function(promise) {
