@@ -6,16 +6,17 @@
   ExtendableEvent.prototype.waitUntil = function(promise) {
     const extendableEvent = this;
 
-    const promises = promisesMap.get(extendableEvent);
+    const head = () => promisesMap.get(extendableEvent);
 
-    if (promises) {
-      promisesMap[extendableEvent] = promises.then(() => {
-        return promise;
-      });
+    if (head()) {
+      promisesMap.set(extendableEvent, head().then(() => promise));
     } else {
       promisesMap.set(extendableEvent, Promise.resolve());
-      waitUntil.call(extendableEvent, promise.then(() => {
-        return promisesMap[extendableEvent];
+      waitUntil.call(extendableEvent, promise.then(function processPromises() {
+        const h = head();
+        return h.then(() => {
+          return h === head() ? Promise.resolve() : processPromises(); // Has head moved?
+        });
       }));
     }
   };
